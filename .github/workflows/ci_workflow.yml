@@ -1,0 +1,71 @@
+name: MLflow Workflow CI - Fanya
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:   # bisa dijalankan manual dari tab Actions
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # === [1] Setup dasar ===
+      - name: Set up job
+        run: echo "Starting MLflow CI for Fanya"
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.12.7
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12.7"
+
+      - name: Check environment
+        run: python --version
+
+      # === [2] Install dependencies ===
+      - name: Install dependencies
+        run: |
+          pip install -r <(conda list --explicit || echo "")
+          pip install mlflow scikit-learn pandas dagshub
+
+      # === [3] Jalankan MLflow Project ===
+      - name: Run MLflow project
+        run: mlflow run MLProject --env-manager local
+
+      # === [4] Dapatkan run ID terakhir ===
+      - name: Get latest MLflow run_id
+        run: |
+          ls -R
+          echo "Latest MLflow Run ID:"
+          find /tmp/mlruns -name meta.yaml | tail -n 1
+
+      # === [5] Upload artefak model (bisa ke GitHub) ===
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: model-artifact
+          path: /tmp/mlruns/
+
+      # === [6] Build Docker model ===
+      - name: Build Docker Model
+        run: |
+          mlflow models build-docker -m /tmp/mlruns/ -n fanya-mlflow-model
+
+      # === [7] Login ke Docker Hub ===
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # === [8] Tag & Push Docker Image ===
+      - name: Tag and Push Docker Image
+        run: |
+          docker tag fanya-mlflow-model:latest ${{ secrets.DOCKER_USERNAME }}/fanya-mlflow-model:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/fanya-mlflow-model:latest
+
+      - name: Complete job
+        run: echo "Workflow CI finished successfully ✅"
