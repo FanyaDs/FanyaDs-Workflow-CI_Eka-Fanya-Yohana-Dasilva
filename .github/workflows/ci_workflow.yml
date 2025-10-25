@@ -3,7 +3,7 @@ name: MLflow Workflow CI - Fanya
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:   # bisa dijalankan manual dari tab Actions
+  workflow_dispatch:
 
 jobs:
   build:
@@ -28,7 +28,6 @@ jobs:
       # === [2] Install dependencies ===
       - name: Install dependencies
         run: |
-          pip install -r <(conda list --explicit || echo "")
           pip install mlflow scikit-learn pandas dagshub
 
       # === [3] Jalankan MLflow Project ===
@@ -38,20 +37,20 @@ jobs:
       # === [4] Dapatkan run ID terakhir ===
       - name: Get latest MLflow run_id
         run: |
-          ls -R
           echo "Latest MLflow Run ID:"
           find /tmp/mlruns -name meta.yaml | tail -n 1
 
-      # === [5] Upload artefak model (bisa ke GitHub) ===
+      # === [5] Upload artefak model (GitHub Artifact) ===
       - name: Upload model artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: model-artifact
           path: /tmp/mlruns/
 
-      # === [6] Build Docker model ===
+      # === [6] Build Docker Model ===
       - name: Build Docker Model
         run: |
+          echo "Building Docker image..."
           mlflow models build-docker -m /tmp/mlruns/ -n fanya-mlflow-model
 
       # === [7] Login ke Docker Hub ===
@@ -67,5 +66,6 @@ jobs:
           docker tag fanya-mlflow-model:latest ${{ secrets.DOCKER_USERNAME }}/fanya-mlflow-model:latest
           docker push ${{ secrets.DOCKER_USERNAME }}/fanya-mlflow-model:latest
 
+      # === [9] Selesai ===
       - name: Complete job
         run: echo "Workflow CI finished successfully ✅"
