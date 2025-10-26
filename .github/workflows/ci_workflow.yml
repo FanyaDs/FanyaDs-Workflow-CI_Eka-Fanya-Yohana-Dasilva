@@ -10,55 +10,67 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # === [1] Checkout repo ===
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # === [2] Setup Python ===
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.12.7"
 
+      # === [3] Install dependencies ===
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install mlflow scikit-learn pandas dagshub docker
 
+      # === [4] Jalankan MLflow Project ===
       - name: Run MLflow Project
         run: |
           echo "🚀 Menjalankan MLflow Project..."
+          # pastikan parent dan child run pakai tracking URI yang sama
+          export MLFLOW_TRACKING_URI="file://$(pwd)/MLProject/mlruns"
           mlflow run ./MLProject --env-manager local --experiment-name "Workflow_CI_Fanya"
 
+      # === [5] Dapatkan run_id terakhir ===
       - name: Get latest MLflow run_id
         id: get_run
         run: |
           echo "🔍 Mendeteksi run_id terbaru..."
-          RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs -n 1 basename)
+          RUN_ID=$(ls -td MLProject/mlruns/0/*/ | head -1 | xargs -n 1 basename)
           echo "Run ID ditemukan: $RUN_ID"
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
+      # === [6] Upload model artefak ===
       - name: Upload model artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: fanya-mlflow-model
-          path: mlruns/
+          path: MLProject/mlruns/
 
+      # === [7] Build Docker model ===
       - name: Build Docker model
         run: |
           echo "🐳 Membangun Docker image..."
-          mlflow models build-docker -m "mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
+          mlflow models build-docker -m "MLProject/mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
 
+      # === [8] Login ke Docker Hub ===
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # === [9] Tag dan push Docker image ===
       - name: Tag and Push Docker image
         run: |
           echo "📦 Push image ke Docker Hub..."
           docker tag fanya-mlflow-model:latest ${{ secrets.DOCKER_USERNAME }}/fanya-mlflow-model:latest
           docker push ${{ secrets.DOCKER_USERNAME }}/fanya-mlflow-model:latest
 
+      # === [10] Selesai ===
       - name: Complete job
         run: echo "✅ Workflow CI selesai tanpa error!"
