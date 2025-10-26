@@ -89,75 +89,67 @@ except Exception as e:
     sys.exit(1)
 
 # ===============================================================
-# [5] TRAINING DAN LOGGING MODEL (DETEKSI MODE CI ATAU LOKAL)
+# [5] TRAINING DAN LOGGING MODEL (FINAL FIXED NESTED RUN)
 # ===============================================================
 try:
-    # Deteksi apakah dijalankan lewat 'mlflow run' (CI mode)
-    active_run_id = os.getenv("MLFLOW_RUN_ID")
-    if active_run_id:
-        print(f"🧭 Mode CI terdeteksi. Menggunakan run aktif dari MLflow Project: {active_run_id}")
-        run = mlflow.start_run(run_id=active_run_id)
-    else:
-        print("🧩 Mode lokal terdeteksi. Membuat run baru...")
-        run = mlflow.start_run()
+    print("🧭 Menjalankan nested run di dalam MLflow Project...")
+    with mlflow.start_run(nested=True) as run:
+        print(f"🚀 Training model RandomForest dimulai... Run ID: {run.info.run_id}")
 
-    print(f"🚀 Training model RandomForest dimulai... Run ID: {run.info.run_id}")
+        # === TRAINING ===
+        clf = RandomForestClassifier(n_estimators=100, random_state=42)
+        clf.fit(X_train_vec, y_train)
+        y_pred = clf.predict(X_test_vec)
 
-    # === TRAINING ===
-    clf = RandomForestClassifier(n_estimators=100, random_state=42)
-    clf.fit(X_train_vec, y_train)
-    y_pred = clf.predict(X_test_vec)
+        # === METRICS ===
+        acc = accuracy_score(y_test, y_pred)
+        prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+        rec = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+        f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
 
-    # === METRICS ===
-    acc = accuracy_score(y_test, y_pred)
-    prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
-    rec = recall_score(y_test, y_pred, average="weighted", zero_division=0)
-    f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+        print("==============================================")
+        print(f"🔢 Accuracy : {acc:.4f}")
+        print(f"🎯 Precision: {prec:.4f}")
+        print(f"📈 Recall   : {rec:.4f}")
+        print(f"🏆 F1-score : {f1:.4f}")
+        print("==============================================")
 
-    print("==============================================")
-    print(f"🔢 Accuracy : {acc:.4f}")
-    print(f"🎯 Precision: {prec:.4f}")
-    print(f"📈 Recall   : {rec:.4f}")
-    print(f"🏆 F1-score : {f1:.4f}")
-    print("==============================================")
+        # === LOG KE MLFLOW ===
+        mlflow.log_metric("accuracy", acc)
+        mlflow.log_metric("precision", prec)
+        mlflow.log_metric("recall", rec)
+        mlflow.log_metric("f1_score", f1)
 
-    # === LOG KE MLFLOW ===
-    mlflow.log_metric("accuracy", acc)
-    mlflow.log_metric("precision", prec)
-    mlflow.log_metric("recall", rec)
-    mlflow.log_metric("f1_score", f1)
+        mlflow.log_param("n_estimators", 100)
+        mlflow.log_param("random_state", 42)
+        mlflow.log_param("vectorizer", "CountVectorizer")
 
-    mlflow.log_param("n_estimators", 100)
-    mlflow.log_param("random_state", 42)
-    mlflow.log_param("vectorizer", "CountVectorizer")
+        # === SIMPAN MODEL ===
+        mlflow.sklearn.log_model(clf, artifact_path="model")
 
-    # === SIMPAN MODEL ===
-    mlflow.sklearn.log_model(clf, artifact_path="model")
+        # ===========================================================
+        # [6] LOG ARTEFAK TAMBAHAN (UNTUK ADVANCED)
+        # ===========================================================
+        artifacts_dir = os.path.join(base_path, "artifacts")
+        os.makedirs(artifacts_dir, exist_ok=True)
 
-    # ===========================================================
-    # [6] LOG ARTEFAK TAMBAHAN (UNTUK ADVANCED)
-    # ===========================================================
-    artifacts_dir = os.path.join(base_path, "artifacts")
-    os.makedirs(artifacts_dir, exist_ok=True)
+        # Simpan vectorizer
+        vectorizer_path = os.path.join(artifacts_dir, "vectorizer.pkl")
+        joblib.dump(vectorizer, vectorizer_path)
+        mlflow.log_artifact(vectorizer_path)
 
-    # Simpan vectorizer
-    vectorizer_path = os.path.join(artifacts_dir, "vectorizer.pkl")
-    joblib.dump(vectorizer, vectorizer_path)
-    mlflow.log_artifact(vectorizer_path)
+        # Simpan metrics report
+        report_path = os.path.join(artifacts_dir, "metrics_report.txt")
+        with open(report_path, "w") as f:
+            f.write("=== MODEL METRICS REPORT ===\n")
+            f.write(f"Accuracy  : {acc:.4f}\n")
+            f.write(f"Precision : {prec:.4f}\n")
+            f.write(f"Recall    : {rec:.4f}\n")
+            f.write(f"F1-score  : {f1:.4f}\n\n")
+            f.write(classification_report(y_test, y_pred))
+        mlflow.log_artifact(report_path)
 
-    # Simpan metrics report
-    report_path = os.path.join(artifacts_dir, "metrics_report.txt")
-    with open(report_path, "w") as f:
-        f.write("=== MODEL METRICS REPORT ===\n")
-        f.write(f"Accuracy  : {acc:.4f}\n")
-        f.write(f"Precision : {prec:.4f}\n")
-        f.write(f"Recall    : {rec:.4f}\n")
-        f.write(f"F1-score  : {f1:.4f}\n\n")
-        f.write(classification_report(y_test, y_pred))
-    mlflow.log_artifact(report_path)
-
-    print(f"✅ Model dan metrik berhasil dilog di Run ID: {run.info.run_id}")
-    mlflow.end_run()
+        print(f"✅ Model dan metrik berhasil dilog di Run ID: {run.info.run_id}")
 
 except Exception as e:
     print(f"❌ Terjadi error saat training/logging: {e}")
