@@ -1,4 +1,4 @@
-name: MLflow Workflow CI - Fanya (Auto Run ID)
+name: MLflow Workflow CI - Fanya (Direct Training Mode)
 
 on:
   push:
@@ -26,14 +26,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install mlflow scikit-learn pandas dagshub docker
 
-      # === [4] Jalankan MLflow Project ===
-      - name: Run MLflow Project
+      # === [4] Jalankan training langsung ===
+      - name: Run MLflow training (direct mode)
         run: |
-          echo "🚀 Menjalankan MLflow Project..."
+          echo "🚀 Menjalankan training langsung via Python..."
           export MLFLOW_TRACKING_URI="file://$(pwd)/mlruns"
-          mlflow run ./MLProject --env-manager local --experiment-name "Workflow_CI_Fanya"
+          python MLProject/modelling.py
 
-      # === [5] Dapatkan run_id terakhir ===
+      # === [5] Dapatkan run_id terbaru ===
       - name: Get latest MLflow run_id
         id: get_run
         run: |
@@ -42,15 +42,14 @@ jobs:
           echo "Run ID ditemukan: $RUN_ID"
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
-      # === [6] Upload artefak model ===
+      # === [6] Upload artefak ===
       - name: Upload model artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: fanya-mlflow-model
           path: mlruns/
 
-      # === [7] Build Docker model ===
+      # === [7] Build Docker ===
       - name: Build Docker model
         run: |
           echo "🐳 Membangun Docker image..."
