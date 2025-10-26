@@ -1,8 +1,13 @@
-import os, sys, pandas as pd, joblib, mlflow, mlflow.sklearn
+import os
+import sys
+import pandas as pd
+import mlflow
+import mlflow.sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
+import joblib
 
 # ===============================================================
 # [1] SETUP PATH DAN VALIDASI DATASET
@@ -21,12 +26,15 @@ try:
         raise FileNotFoundError(f"Dataset tidak ditemukan di path: {data_path}")
 
     df = pd.read_csv(data_path)
+
     if "clean_text" not in df.columns or "label" not in df.columns:
         raise KeyError("Kolom 'clean_text' atau 'label' tidak ditemukan di dataset!")
 
     df = df.dropna(subset=["clean_text", "label"])
     df["clean_text"] = df["clean_text"].astype(str).str.strip()
+
     print(f"✅ Dataset berhasil dimuat. Jumlah data: {len(df)} baris")
+    print(f"📊 Contoh data:\n{df.head(3)}")
 
 except Exception as e:
     print(f"❌ Gagal memuat dataset: {e}")
@@ -36,10 +44,15 @@ except Exception as e:
 # [2] SPLIT DATA
 # ===============================================================
 try:
+    X = df["clean_text"]
+    y = df["label"]
+
     X_train, X_test, y_train, y_test = train_test_split(
-        df["clean_text"], df["label"], test_size=0.2, random_state=42
+        X, y, test_size=0.2, random_state=42
     )
     print("✅ Dataset berhasil dibagi menjadi data train dan test.")
+    print(f"📈 Data Train: {len(X_train)}, Data Test: {len(X_test)}")
+
 except Exception as e:
     print(f"❌ Gagal saat split data: {e}")
     sys.exit(1)
@@ -52,6 +65,8 @@ try:
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
     print("✅ Proses vektorisasi teks selesai.")
+    print(f"🧠 Jumlah fitur: {len(vectorizer.get_feature_names_out())}")
+
 except Exception as e:
     print(f"❌ Gagal saat vektorisasi: {e}")
     sys.exit(1)
@@ -68,50 +83,79 @@ except Exception as e:
     sys.exit(1)
 
 # ===============================================================
-# [5] TRAINING DAN LOGGING MODEL
+# [5] TRAINING DAN LOGGING MODEL (AUTO DETECT RUN)
 # ===============================================================
 try:
-    with mlflow.start_run() as run:
-        print(f"🚀 Training model RandomForest dimulai... Run ID: {run.info.run_id}")
+    run = mlflow.active_run()
+    if run is None:
+        run = mlflow.start_run()
+        print(f"🆕 Membuat run baru dengan ID: {run.info.run_id}")
+    else:
+        print(f"🧭 Menggunakan run aktif dari MLflow Project: {run.info.run_id}")
 
-        clf = RandomForestClassifier(n_estimators=100, random_state=42)
-        clf.fit(X_train_vec, y_train)
-        y_pred = clf.predict(X_test_vec)
+    print(f"🚀 Training model RandomForest dimulai...")
 
-        acc = accuracy_score(y_test, y_pred)
-        prec = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-        rec = recall_score(y_test, y_pred, average='weighted', zero_division=0)
-        f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+    clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    clf.fit(X_train_vec, y_train)
 
-        mlflow.log_metric("accuracy", acc)
-        mlflow.log_metric("precision", prec)
-        mlflow.log_metric("recall", rec)
-        mlflow.log_metric("f1_score", f1)
+    y_pred = clf.predict(X_test_vec)
 
-        mlflow.log_param("n_estimators", 100)
-        mlflow.log_param("random_state", 42)
-        mlflow.log_param("vectorizer", "CountVectorizer")
+    acc = accuracy_score(y_test, y_pred)
+    prec = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+    rec = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+    f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
 
-        mlflow.sklearn.log_model(clf, artifact_path="model")
+    print("==============================================")
+    print(f"🔢 Accuracy : {acc:.4f}")
+    print(f"🎯 Precision: {prec:.4f}")
+    print(f"📈 Recall   : {rec:.4f}")
+    print(f"🏆 F1-score : {f1:.4f}")
+    print("==============================================")
 
-        artifacts_dir = os.path.join(base_path, "artifacts")
-        os.makedirs(artifacts_dir, exist_ok=True)
-        joblib.dump(vectorizer, os.path.join(artifacts_dir, "vectorizer.pkl"))
-        mlflow.log_artifact(os.path.join(artifacts_dir, "vectorizer.pkl"))
+    # Log metrics dan params ke MLflow
+    mlflow.log_metric("accuracy", acc)
+    mlflow.log_metric("precision", prec)
+    mlflow.log_metric("recall", rec)
+    mlflow.log_metric("f1_score", f1)
 
-        report_path = os.path.join(artifacts_dir, "metrics_report.txt")
-        with open(report_path, "w") as f:
-            f.write(f"Accuracy  : {acc:.4f}\n")
-            f.write(f"Precision : {prec:.4f}\n")
-            f.write(f"Recall    : {rec:.4f}\n")
-            f.write(f"F1-score  : {f1:.4f}\n")
-        mlflow.log_artifact(report_path)
+    mlflow.log_param("n_estimators", 100)
+    mlflow.log_param("random_state", 42)
+    mlflow.log_param("vectorizer", "CountVectorizer")
 
-        print(f"✅ Model dan metrik berhasil dilog di Run ID: {run.info.run_id}")
+    # Simpan model
+    mlflow.sklearn.log_model(clf, artifact_path="model")
+
+    # ===========================================================
+    # [6] LOG ARTEFAK TAMBAHAN (untuk Advanced)
+    # ===========================================================
+    artifacts_dir = os.path.join(base_path, "artifacts")
+    os.makedirs(artifacts_dir, exist_ok=True)
+
+    # Simpan vectorizer
+    vectorizer_path = os.path.join(artifacts_dir, "vectorizer.pkl")
+    joblib.dump(vectorizer, vectorizer_path)
+    mlflow.log_artifact(vectorizer_path)
+
+    # Simpan metrics report
+    report_path = os.path.join(artifacts_dir, "metrics_report.txt")
+    with open(report_path, "w") as f:
+        f.write("=== MODEL METRICS REPORT ===\n")
+        f.write(f"Accuracy  : {acc:.4f}\n")
+        f.write(f"Precision : {prec:.4f}\n")
+        f.write(f"Recall    : {rec:.4f}\n")
+        f.write(f"F1-score  : {f1:.4f}\n\n")
+        f.write(classification_report(y_test, y_pred))
+    mlflow.log_artifact(report_path)
+
+    print(f"✅ Model dan metrik berhasil dilog di Run ID: {run.info.run_id}")
+    mlflow.end_run()
 
 except Exception as e:
     print(f"❌ Terjadi error saat training/logging: {e}")
     sys.exit(1)
 
+# ===============================================================
+# [7] SELESAI
+# ===============================================================
 print("🎉 Training selesai tanpa error.")
 print("==============================================")
