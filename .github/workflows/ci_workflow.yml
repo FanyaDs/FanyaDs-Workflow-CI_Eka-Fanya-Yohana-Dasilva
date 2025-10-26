@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # === [1] Checkout repo ===
+      # === [1] Checkout repository ===
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -23,52 +23,60 @@ jobs:
       # === [3] Install dependencies ===
       - name: Install dependencies
         run: |
+          echo "📦 Menginstal dependensi..."
           python -m pip install --upgrade pip
           pip install mlflow scikit-learn pandas dagshub docker
 
-      # === [4] Jalankan training langsung ===
+      # === [4] Bersihkan artefak lama (opsional tapi disarankan) ===
+      - name: Clean previous MLflow runs
+        run: |
+          echo "🧹 Menghapus folder MLflow lama untuk run baru..."
+          rm -rf MLProject/mlruns || true
+
+      # === [5] Jalankan training langsung ===
       - name: Run MLflow training (direct mode)
         run: |
           echo "🚀 Menjalankan training langsung via Python..."
-          export MLFLOW_TRACKING_URI="file://$(pwd)/mlruns"
+          export MLFLOW_TRACKING_URI="file://$(pwd)/MLProject/mlruns"
           python MLProject/modelling.py
 
-      # === [5] Dapatkan run_id terbaru ===
+      # === [6] Dapatkan run_id terbaru ===
       - name: Get latest MLflow run_id
         id: get_run
         run: |
           echo "🔍 Mendeteksi run_id terbaru..."
-          RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs -n 1 basename)
+          RUN_ID=$(ls -td MLProject/mlruns/0/*/ | head -1 | xargs -n 1 basename)
           echo "Run ID ditemukan: $RUN_ID"
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
-      # === [6] Upload artefak ===
+      # === [7] Upload artefak model ===
       - name: Upload model artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: fanya-mlflow-model
-          path: mlruns/
+          path: MLProject/mlruns/
 
-      # === [7] Build Docker ===
+      # === [8] Build Docker model ===
       - name: Build Docker model
         run: |
-          echo "🐳 Membangun Docker image..."
-          mlflow models build-docker -m "mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
+          echo "🐳 Membangun Docker image dari model MLflow..."
+          mlflow models build-docker -m "MLProject/mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
 
-      # === [8] Login ke Docker Hub ===
+      # === [9] Login ke Docker Hub ===
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # === [9] Push Docker image ===
+      # === [10] Tag dan Push Docker image ===
       - name: Tag and Push Docker image
         run: |
           echo "📦 Push image ke Docker Hub..."
           docker tag fanya-mlflow-model:latest ${{ secrets.DOCKER_USERNAME }}/fanya-mlflow-model:latest
           docker push ${{ secrets.DOCKER_USERNAME }}/fanya-mlflow-model:latest
 
-      # === [10] Selesai ===
+      # === [11] Selesai ===
       - name: Complete job
         run: echo "✅ Workflow CI selesai tanpa error!"
