@@ -1,5 +1,6 @@
-name: workflow-ci-fanya
-conda_env: conda.yaml
+name: Workflow_CI_Fanya
+
 entry_points:
   main:
+    parameters: {}
     command: "python modelling.py"
