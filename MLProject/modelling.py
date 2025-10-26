@@ -89,11 +89,11 @@ except Exception as e:
     sys.exit(1)
 
 # ===============================================================
-# [5] TRAINING DAN LOGGING MODEL (FINAL FIXED NESTED RUN)
+# [5] TRAINING DAN LOGGING MODEL (FINAL FIX - RUN LOKAL)
 # ===============================================================
 try:
-    print("🧭 Menjalankan nested run di dalam MLflow Project...")
-    with mlflow.start_run(nested=True) as run:
+    print("🧭 Membuat run baru lokal (mode CI aman)...")
+    with mlflow.start_run() as run:
         print(f"🚀 Training model RandomForest dimulai... Run ID: {run.info.run_id}")
 
         # === TRAINING ===
