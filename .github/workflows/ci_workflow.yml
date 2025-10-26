@@ -30,8 +30,7 @@ jobs:
       - name: Run MLflow Project
         run: |
           echo "🚀 Menjalankan MLflow Project..."
-          # pastikan parent dan child run pakai tracking URI yang sama
-          export MLFLOW_TRACKING_URI="file://$(pwd)/MLProject/mlruns"
+          export MLFLOW_TRACKING_URI="file://$(pwd)/mlruns"
           mlflow run ./MLProject --env-manager local --experiment-name "Workflow_CI_Fanya"
 
       # === [5] Dapatkan run_id terakhir ===
@@ -39,23 +38,23 @@ jobs:
         id: get_run
         run: |
           echo "🔍 Mendeteksi run_id terbaru..."
-          RUN_ID=$(ls -td MLProject/mlruns/0/*/ | head -1 | xargs -n 1 basename)
+          RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs -n 1 basename)
           echo "Run ID ditemukan: $RUN_ID"
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
-      # === [6] Upload model artefak ===
+      # === [6] Upload artefak model ===
       - name: Upload model artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: fanya-mlflow-model
-          path: MLProject/mlruns/
+          path: mlruns/
 
       # === [7] Build Docker model ===
       - name: Build Docker model
         run: |
           echo "🐳 Membangun Docker image..."
-          mlflow models build-docker -m "MLProject/mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
+          mlflow models build-docker -m "mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
 
       # === [8] Login ke Docker Hub ===
       - name: Login to Docker Hub
@@ -64,7 +63,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # === [9] Tag dan push Docker image ===
+      # === [9] Push Docker image ===
       - name: Tag and Push Docker image
         run: |
           echo "📦 Push image ke Docker Hub..."
