@@ -27,17 +27,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install mlflow scikit-learn pandas dagshub docker
 
-      # === [4] Bersihkan artefak lama (opsional tapi disarankan) ===
+      # === [4] Bersihkan artefak lama ===
       - name: Clean previous MLflow runs
         run: |
-          echo "🧹 Menghapus folder MLflow lama untuk run baru..."
-          rm -rf MLProject/mlruns || true
+          echo "🧹 Menghapus folder MLflow lama..."
+          rm -rf mlruns || true
 
       # === [5] Jalankan training langsung ===
       - name: Run MLflow training (direct mode)
         run: |
           echo "🚀 Menjalankan training langsung via Python..."
-          export MLFLOW_TRACKING_URI="file://$(pwd)/MLProject/mlruns"
+          export MLFLOW_TRACKING_URI="file://$(pwd)/mlruns"
           python MLProject/modelling.py
 
       # === [6] Dapatkan run_id terbaru ===
@@ -45,23 +45,23 @@ jobs:
         id: get_run
         run: |
           echo "🔍 Mendeteksi run_id terbaru..."
-          RUN_ID=$(ls -td MLProject/mlruns/0/*/ | head -1 | xargs -n 1 basename)
+          RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs -n 1 basename)
           echo "Run ID ditemukan: $RUN_ID"
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
-      # === [7] Upload artefak model ===
+      # === [7] Upload artefak ===
       - name: Upload model artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: fanya-mlflow-model
-          path: MLProject/mlruns/
+          path: mlruns/
 
-      # === [8] Build Docker model ===
+      # === [8] Build Docker ===
       - name: Build Docker model
         run: |
           echo "🐳 Membangun Docker image dari model MLflow..."
-          mlflow models build-docker -m "MLProject/mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
+          mlflow models build-docker -m "mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
 
       # === [9] Login ke Docker Hub ===
       - name: Login to Docker Hub
@@ -70,7 +70,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # === [10] Tag dan Push Docker image ===
+      # === [10] Push Docker image ===
       - name: Tag and Push Docker image
         run: |
           echo "📦 Push image ke Docker Hub..."
