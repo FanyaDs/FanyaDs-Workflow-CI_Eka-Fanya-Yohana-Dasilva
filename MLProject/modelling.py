@@ -6,7 +6,13 @@ import mlflow.sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    classification_report
+)
 import joblib
 
 # ===============================================================
@@ -83,27 +89,30 @@ except Exception as e:
     sys.exit(1)
 
 # ===============================================================
-# [5] TRAINING DAN LOGGING MODEL (AUTO DETECT RUN)
+# [5] TRAINING DAN LOGGING MODEL (DETEKSI MODE CI ATAU LOKAL)
 # ===============================================================
 try:
-    run = mlflow.active_run()
-    if run is None:
-        run = mlflow.start_run()
-        print(f"🆕 Membuat run baru dengan ID: {run.info.run_id}")
+    # Deteksi apakah dijalankan lewat 'mlflow run' (CI mode)
+    active_run_id = os.getenv("MLFLOW_RUN_ID")
+    if active_run_id:
+        print(f"🧭 Mode CI terdeteksi. Menggunakan run aktif dari MLflow Project: {active_run_id}")
+        run = mlflow.start_run(run_id=active_run_id)
     else:
-        print(f"🧭 Menggunakan run aktif dari MLflow Project: {run.info.run_id}")
+        print("🧩 Mode lokal terdeteksi. Membuat run baru...")
+        run = mlflow.start_run()
 
-    print(f"🚀 Training model RandomForest dimulai...")
+    print(f"🚀 Training model RandomForest dimulai... Run ID: {run.info.run_id}")
 
+    # === TRAINING ===
     clf = RandomForestClassifier(n_estimators=100, random_state=42)
     clf.fit(X_train_vec, y_train)
-
     y_pred = clf.predict(X_test_vec)
 
+    # === METRICS ===
     acc = accuracy_score(y_test, y_pred)
-    prec = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-    rec = recall_score(y_test, y_pred, average='weighted', zero_division=0)
-    f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+    prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+    rec = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+    f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
 
     print("==============================================")
     print(f"🔢 Accuracy : {acc:.4f}")
@@ -112,7 +121,7 @@ try:
     print(f"🏆 F1-score : {f1:.4f}")
     print("==============================================")
 
-    # Log metrics dan params ke MLflow
+    # === LOG KE MLFLOW ===
     mlflow.log_metric("accuracy", acc)
     mlflow.log_metric("precision", prec)
     mlflow.log_metric("recall", rec)
@@ -122,11 +131,11 @@ try:
     mlflow.log_param("random_state", 42)
     mlflow.log_param("vectorizer", "CountVectorizer")
 
-    # Simpan model
+    # === SIMPAN MODEL ===
     mlflow.sklearn.log_model(clf, artifact_path="model")
 
     # ===========================================================
-    # [6] LOG ARTEFAK TAMBAHAN (untuk Advanced)
+    # [6] LOG ARTEFAK TAMBAHAN (UNTUK ADVANCED)
     # ===========================================================
     artifacts_dir = os.path.join(base_path, "artifacts")
     os.makedirs(artifacts_dir, exist_ok=True)
