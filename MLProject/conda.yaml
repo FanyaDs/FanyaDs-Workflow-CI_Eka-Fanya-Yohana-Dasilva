@@ -1,11 +1,11 @@
-name: msml-env
+name: mlflow-env
 channels:
   - defaults
 dependencies:
   - python=3.12.7
-  - scikit-learn
-  - pandas
-  - mlflow
   - pip
   - pip:
-      - dagshub
+      - mlflow==2.19.0
+      - scikit-learn
+      - pandas
+      - joblib
