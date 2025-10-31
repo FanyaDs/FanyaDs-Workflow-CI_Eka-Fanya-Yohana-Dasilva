@@ -19,7 +19,7 @@ import joblib
 # [1] SETUP PATH DAN VALIDASI DATASET
 # ===============================================================
 try:
-    base_path = os.path.dirname(os.path.abspath(__file__))
+    base_path = os.getcwd()
     data_path = os.path.join(base_path, "namadataset_preprocessing", "wisata_bali_preprocessed.csv")
 
     print("==============================================")
