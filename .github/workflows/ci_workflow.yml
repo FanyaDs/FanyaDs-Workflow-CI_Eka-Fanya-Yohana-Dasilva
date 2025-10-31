@@ -55,7 +55,7 @@ jobs:
           ls -R MLProject
           echo "🔎 Pastikan ada folder mlruns/<experiment_id>/ dan file CSV."
 
-      # === [7] Dapatkan run_id terbaru (FIX untuk dynamic experiment ID) ===
+      # === [7] Dapatkan run_id terbaru (dynamic experiment ID) ===
       - name: Get latest MLflow run_id
         id: get_run
         run: |
@@ -87,9 +87,11 @@ jobs:
         run: |
           echo "🐳 Membangun Docker image dari model MLflow..."
           cd MLProject
-          MODEL_PATH="mlruns/${{ steps.get_run.outputs.experiment_id }}/${{ steps.get_run.outputs.run_id }}/artifacts/model"
-          if [ ! -d "$MODEL_PATH" ]; then
-            echo "❌ Model path tidak ditemukan: $MODEL_PATH"
+          EXPERIMENT_ID="${{ steps.get_run.outputs.experiment_id }}"
+          # Cari folder model MLflow yang sebenarnya (models/m-*/artifacts)
+          MODEL_PATH=$(find mlruns/${EXPERIMENT_ID} -type d -path "*/models/m-*/artifacts" | head -1)
+          if [ -z "$MODEL_PATH" ]; then
+            echo "❌ Model path tidak ditemukan di folder models/. Struktur mlruns:"
             ls -R mlruns
             exit 1
           fi
