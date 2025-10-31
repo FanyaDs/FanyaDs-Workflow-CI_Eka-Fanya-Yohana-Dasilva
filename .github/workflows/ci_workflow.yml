@@ -34,20 +34,27 @@ jobs:
           rm -rf mlruns || true
 
       # === [5] Jalankan training langsung ===
-      - name: Run MLflow training (direct mode)
-        run: |
-          echo "🚀 Menjalankan training langsung via Python..."
-          export MLFLOW_TRACKING_URI="file://$(pwd)/mlruns"
-          python MLProject/modelling.py
+- name: Run MLflow training (direct mode)
+  run: |
+    echo "🚀 Menjalankan training langsung via MLProject..."
+    cd MLProject
+    export MLFLOW_TRACKING_URI="file://$(pwd)/mlruns"
+    python modelling.py
 
-      # === [6] Dapatkan run_id terbaru ===
-      - name: Get latest MLflow run_id
-        id: get_run
-        run: |
-          echo "🔍 Mendeteksi run_id terbaru..."
-          RUN_ID=$(ls -td mlruns/0/*/ | head -1 | xargs -n 1 basename)
-          echo "Run ID ditemukan: $RUN_ID"
-          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+# === [6] Dapatkan run_id terbaru ===
+- name: Get latest MLflow run_id
+  id: get_run
+  run: |
+    cd MLProject
+    echo "🔍 Mendeteksi run_id terbaru..."
+    if [ ! -d "mlruns/0" ]; then
+      echo "❌ Folder mlruns belum terbentuk. Cek apakah training berhasil."
+      exit 1
+    fi
+    RUN_ID=$(basename $(ls -td mlruns/0/*/ | head -1))
+    echo "✅ Run ID ditemukan: $RUN_ID"
+    echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
 
       # === [7] Upload artefak ===
       - name: Upload model artifact
