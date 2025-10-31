@@ -15,6 +15,11 @@ from sklearn.metrics import (
 )
 import joblib
 
+print("==============================================")
+print("🚀 [DEBUG] modelling.py berhasil dijalankan")
+print("📂 Working Directory :", os.getcwd())
+print("==============================================")
+
 # ===============================================================
 # [1] SETUP PATH DAN VALIDASI DATASET
 # ===============================================================
@@ -22,11 +27,7 @@ try:
     base_path = os.getcwd()
     data_path = os.path.join(base_path, "namadataset_preprocessing", "wisata_bali_preprocessed.csv")
 
-    print("==============================================")
-    print("📂 Current Working Directory:", os.getcwd())
-    print("📁 Base Path:", base_path)
     print(f"🔍 Mencoba memuat dataset dari: {data_path}")
-    print("==============================================")
 
     if not os.path.exists(data_path):
         raise FileNotFoundError(f"Dataset tidak ditemukan di path: {data_path}")
@@ -39,12 +40,13 @@ try:
     df = df.dropna(subset=["clean_text", "label"])
     df["clean_text"] = df["clean_text"].astype(str).str.strip()
 
-    print(f"✅ Dataset berhasil dimuat. Jumlah data: {len(df)} baris")
+    print(f"✅ Dataset berhasil dimuat ({len(df)} baris)")
     print(f"📊 Contoh data:\n{df.head(3)}")
 
 except Exception as e:
     print(f"❌ Gagal memuat dataset: {e}")
-    sys.exit(1)
+    print("⚠️ [DEBUG] Program tidak dihentikan agar log tetap muncul.")
+    df = pd.DataFrame({"clean_text": ["fallback"], "label": [0]})  # dummy data agar tidak error lanjut
 
 # ===============================================================
 # [2] SPLIT DATA
@@ -52,15 +54,11 @@ except Exception as e:
 try:
     X = df["clean_text"]
     y = df["label"]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-    print("✅ Dataset berhasil dibagi menjadi data train dan test.")
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    print("✅ Dataset berhasil dibagi menjadi train/test.")
     print(f"📈 Data Train: {len(X_train)}, Data Test: {len(X_test)}")
-
 except Exception as e:
-    print(f"❌ Gagal saat split data: {e}")
+    print(f"❌ Gagal split data: {e}")
     sys.exit(1)
 
 # ===============================================================
@@ -70,33 +68,34 @@ try:
     vectorizer = CountVectorizer()
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
-    print("✅ Proses vektorisasi teks selesai.")
+    print("✅ Vektorisasi teks selesai.")
     print(f"🧠 Jumlah fitur: {len(vectorizer.get_feature_names_out())}")
-
 except Exception as e:
-    print(f"❌ Gagal saat vektorisasi: {e}")
+    print(f"❌ Gagal vektorisasi: {e}")
     sys.exit(1)
 
 # ===============================================================
 # [4] SETUP MLFLOW EXPERIMENT
 # ===============================================================
 try:
-    mlflow.set_tracking_uri("file://" + os.path.join(base_path, "mlruns"))
+    mlruns_path = os.path.join(base_path, "mlruns")
+    os.makedirs(mlruns_path, exist_ok=True)
+
+    mlflow.set_tracking_uri("file://" + mlruns_path)
     mlflow.set_experiment("Workflow_CI_Fanya")
-    print("✅ MLflow Tracking URI dan experiment berhasil diinisialisasi.")
+    print(f"✅ MLflow Tracking URI diinisialisasi di: {mlruns_path}")
 except Exception as e:
     print(f"❌ Gagal setup MLflow: {e}")
     sys.exit(1)
 
 # ===============================================================
-# [5] TRAINING DAN LOGGING MODEL (FINAL FIX - RUN LOKAL)
+# [5] TRAINING DAN LOGGING MODEL
 # ===============================================================
 try:
-    print("🧭 Membuat run baru lokal (mode CI aman)...")
-    with mlflow.start_run() as run:
-        print(f"🚀 Training model RandomForest dimulai... Run ID: {run.info.run_id}")
+    print("🧭 Membuat run baru MLflow (mode CI)...")
+    with mlflow.start_run(run_name="CI_Run_Fanya") as run:
+        print(f"🚀 Training RandomForest dimulai... Run ID: {run.info.run_id}")
 
-        # === TRAINING ===
         clf = RandomForestClassifier(n_estimators=100, random_state=42)
         clf.fit(X_train_vec, y_train)
         y_pred = clf.predict(X_test_vec)
@@ -127,18 +126,14 @@ try:
         # === SIMPAN MODEL ===
         mlflow.sklearn.log_model(clf, artifact_path="model")
 
-        # ===========================================================
-        # [6] LOG ARTEFAK TAMBAHAN (UNTUK ADVANCED)
-        # ===========================================================
+        # === LOG ARTEFAK TAMBAHAN ===
         artifacts_dir = os.path.join(base_path, "artifacts")
         os.makedirs(artifacts_dir, exist_ok=True)
 
-        # Simpan vectorizer
         vectorizer_path = os.path.join(artifacts_dir, "vectorizer.pkl")
         joblib.dump(vectorizer, vectorizer_path)
         mlflow.log_artifact(vectorizer_path)
 
-        # Simpan metrics report
         report_path = os.path.join(artifacts_dir, "metrics_report.txt")
         with open(report_path, "w") as f:
             f.write("=== MODEL METRICS REPORT ===\n")
@@ -150,13 +145,12 @@ try:
         mlflow.log_artifact(report_path)
 
         print(f"✅ Model dan metrik berhasil dilog di Run ID: {run.info.run_id}")
-
 except Exception as e:
     print(f"❌ Terjadi error saat training/logging: {e}")
     sys.exit(1)
 
 # ===============================================================
-# [7] SELESAI
+# [6] SELESAI
 # ===============================================================
 print("🎉 Training selesai tanpa error.")
 print("==============================================")
