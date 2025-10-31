@@ -13,17 +13,6 @@ Menyimpan artefak hasil pelatihan ke GitHub Actions Artifact.
 
 Membangun dan mengunggah Docker image model ke Docker Hub.
 
-Struktur Repository
-Workflow-CI/
-├── .github/workflows/ci_workflow.yml
-├── MLProject/
-│   ├── modelling.py
-│   ├── conda.yaml
-│   ├── MLProject
-│   ├── namadataset_preprocessing/
-│   └── artifacts/
-├── README.md
-└── Tautan_DockerHub.txt
 
 Alur Workflow
 
