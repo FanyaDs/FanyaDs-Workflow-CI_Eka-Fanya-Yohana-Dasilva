@@ -53,21 +53,25 @@ jobs:
         run: |
           echo "📂 Menampilkan isi direktori setelah training:"
           ls -R MLProject
-          echo "🔎 Pastikan ada folder mlruns/0/ dan file CSV."
+          echo "🔎 Pastikan ada folder mlruns/<experiment_id>/ dan file CSV."
 
-      # === [7] Dapatkan run_id terbaru ===
+      # === [7] Dapatkan run_id terbaru (FIX untuk dynamic experiment ID) ===
       - name: Get latest MLflow run_id
         id: get_run
         run: |
           cd MLProject
           echo "🔍 Mendeteksi run_id terbaru..."
-          if [ ! -d "mlruns/0" ]; then
+          if [ ! -d "mlruns" ]; then
             echo "❌ Folder mlruns belum terbentuk. Cek apakah training berhasil."
             ls -R
             exit 1
           fi
-          RUN_ID=$(basename $(ls -td mlruns/0/*/ | head -1))
-          echo "✅ Run ID ditemukan: $RUN_ID"
+          # Ambil ID experiment terbaru
+          EXPERIMENT_ID=$(basename $(ls -td mlruns/*/ | head -1))
+          # Ambil run_id terbaru di dalam experiment itu
+          RUN_ID=$(basename $(ls -td mlruns/${EXPERIMENT_ID}/*/ | head -1))
+          echo "✅ Run ID ditemukan di experiment ${EXPERIMENT_ID}: ${RUN_ID}"
+          echo "experiment_id=$EXPERIMENT_ID" >> $GITHUB_OUTPUT
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
       # === [8] Upload artefak ke GitHub ===
@@ -83,7 +87,7 @@ jobs:
         run: |
           echo "🐳 Membangun Docker image dari model MLflow..."
           cd MLProject
-          MODEL_PATH="mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model"
+          MODEL_PATH="mlruns/${{ steps.get_run.outputs.experiment_id }}/${{ steps.get_run.outputs.run_id }}/artifacts/model"
           if [ ! -d "$MODEL_PATH" ]; then
             echo "❌ Model path tidak ditemukan: $MODEL_PATH"
             ls -R mlruns
