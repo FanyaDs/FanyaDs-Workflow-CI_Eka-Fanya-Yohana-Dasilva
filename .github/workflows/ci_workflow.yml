@@ -31,30 +31,30 @@ jobs:
       - name: Clean previous MLflow runs
         run: |
           echo "🧹 Menghapus folder MLflow lama..."
-          rm -rf mlruns || true
+          rm -rf MLProject/mlruns || true
 
       # === [5] Jalankan training langsung ===
-- name: Run MLflow training (direct mode)
-  run: |
-    echo "🚀 Menjalankan training langsung via MLProject..."
-    cd MLProject
-    export MLFLOW_TRACKING_URI="file://$(pwd)/mlruns"
-    python modelling.py
+      - name: Run MLflow training (direct mode)
+        run: |
+          echo "🚀 Menjalankan training langsung via MLProject..."
+          cd MLProject
+          export MLFLOW_TRACKING_URI="file://$(pwd)/mlruns"
+          python modelling.py
 
-# === [6] Dapatkan run_id terbaru ===
-- name: Get latest MLflow run_id
-  id: get_run
-  run: |
-    cd MLProject
-    echo "🔍 Mendeteksi run_id terbaru..."
-    if [ ! -d "mlruns/0" ]; then
-      echo "❌ Folder mlruns belum terbentuk. Cek apakah training berhasil."
-      exit 1
-    fi
-    RUN_ID=$(basename $(ls -td mlruns/0/*/ | head -1))
-    echo "✅ Run ID ditemukan: $RUN_ID"
-    echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
-
+      # === [6] Dapatkan run_id terbaru ===
+      - name: Get latest MLflow run_id
+        id: get_run
+        run: |
+          cd MLProject
+          echo "🔍 Mendeteksi run_id terbaru..."
+          if [ ! -d "mlruns/0" ]; then
+            echo "❌ Folder mlruns belum terbentuk. Cek apakah training berhasil."
+            ls -R
+            exit 1
+          fi
+          RUN_ID=$(basename $(ls -td mlruns/0/*/ | head -1))
+          echo "✅ Run ID ditemukan: $RUN_ID"
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
       # === [7] Upload artefak ===
       - name: Upload model artifact
@@ -62,12 +62,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fanya-mlflow-model
-          path: mlruns/
+          path: MLProject/mlruns/
 
-      # === [8] Build Docker ===
+      # === [8] Build Docker image dari model MLflow ===
       - name: Build Docker model
         run: |
           echo "🐳 Membangun Docker image dari model MLflow..."
+          cd MLProject
           mlflow models build-docker -m "mlruns/0/${{ steps.get_run.outputs.run_id }}/artifacts/model" -n fanya-mlflow-model
 
       # === [9] Login ke Docker Hub ===
