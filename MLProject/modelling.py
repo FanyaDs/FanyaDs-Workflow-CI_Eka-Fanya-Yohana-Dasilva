@@ -20,11 +20,8 @@ print("🚀 [DEBUG] modelling.py berhasil dijalankan")
 print("📂 Working Directory :", os.getcwd())
 print("==============================================")
 
-# Gunakan autolog — MLflow yang membuka & menutup run otomatis
-mlflow.autolog()
-
 # ===============================================================
-# [1] LOAD DATASET
+# [1] Load Dataset
 # ===============================================================
 try:
     base_path = os.getcwd()
@@ -42,59 +39,59 @@ except Exception as e:
     df = pd.DataFrame({"clean_text": ["fallback"], "label": [0]})
 
 # ===============================================================
-# [2] SPLIT DATA
+# [2] Split Data
 # ===============================================================
 X = df["clean_text"]
 y = df["label"]
-
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
 # ===============================================================
-# [3] VEKTORISASI
+# [3] Vectorizer
 # ===============================================================
 vectorizer = CountVectorizer()
 X_train_vec = vectorizer.fit_transform(X_train)
 X_test_vec = vectorizer.transform(X_test)
 
 # ===============================================================
-# [4] TRAINING
+# [4] Start nested run
 # ===============================================================
-clf = RandomForestClassifier(n_estimators=100, random_state=42)
-clf.fit(X_train_vec, y_train)
-y_pred = clf.predict(X_test_vec)
+print("🧭 Memulai nested MLflow run...")
 
-# METRICS MANUAL
-acc = accuracy_score(y_test, y_pred)
-prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
-rec = recall_score(y_test, y_pred, average="weighted", zero_division=0)
-f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+with mlflow.start_run(nested=True):
+    print("🚀 Training model...")
 
-print("==============================================")
-print(f"🔢 Accuracy : {acc:.4f}")
-print(f"🎯 Precision: {prec:.4f}")
-print(f"📈 Recall   : {rec:.4f}")
-print(f"🏆 F1-score : {f1:.4f}")
-print("==============================================")
+    clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    clf.fit(X_train_vec, y_train)
+    y_pred = clf.predict(X_test_vec)
 
-# ===============================================================
-# [5] SIMPAN ARTEFAK TAMBAHAN (optional untuk CI)
-# ===============================================================
-artifacts_dir = os.path.join(base_path, "artifacts")
-os.makedirs(artifacts_dir, exist_ok=True)
+    acc = accuracy_score(y_test, y_pred)
+    prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+    rec = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+    f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
 
-vectorizer_path = os.path.join(artifacts_dir, "vectorizer_ci.pkl")
-joblib.dump(vectorizer, vectorizer_path)
+    mlflow.log_metric("accuracy", acc)
+    mlflow.log_metric("precision", prec)
+    mlflow.log_metric("recall", rec)
+    mlflow.log_metric("f1_score", f1)
 
-report_path = os.path.join(artifacts_dir, "metrics_report_ci.txt")
-with open(report_path, "w") as f:
-    f.write("=== CI METRICS REPORT ===\n")
-    f.write(f"Accuracy  : {acc:.4f}\n")
-    f.write(f"Precision : {prec:.4f}\n")
-    f.write(f"Recall    : {rec:.4f}\n")
-    f.write(f"F1-score  : {f1:.4f}\n\n")
-    f.write(classification_report(y_test, y_pred))
+    mlflow.log_param("n_estimators", 100)
+    mlflow.log_param("random_state", 42)
+    mlflow.log_param("vectorizer", "CountVectorizer")
 
-print("🎉 Training selesai tanpa error.")
-print("==============================================")
+    mlflow.sklearn.log_model(clf, artifact_path="model")
+
+    artifacts_dir = os.path.join(base_path, "artifacts")
+    os.makedirs(artifacts_dir, exist_ok=True)
+
+    vec_path = os.path.join(artifacts_dir, "vectorizer.pkl")
+    joblib.dump(vectorizer, vec_path)
+    mlflow.log_artifact(vec_path)
+
+    report_path = os.path.join(artifacts_dir, "metrics_report.txt")
+    with open(report_path, "w") as f:
+        f.write(classification_report(y_test, y_pred))
+    mlflow.log_artifact(report_path)
+
+print("🎉 Training selesai tanpa error!")
