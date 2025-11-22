@@ -39,7 +39,7 @@ except Exception as e:
     df = pd.DataFrame({"clean_text": ["fallback"], "label": [0]})
 
 # ===============================================================
-# [2] Split Data
+# [2] Train/Test Split
 # ===============================================================
 X = df["clean_text"]
 y = df["label"]
@@ -55,7 +55,7 @@ X_train_vec = vectorizer.fit_transform(X_train)
 X_test_vec = vectorizer.transform(X_test)
 
 # ===============================================================
-# [4] Start nested run
+# [4] Nested Run — FIX untuk MLflow Project
 # ===============================================================
 print("🧭 Memulai nested MLflow run...")
 
@@ -95,3 +95,4 @@ with mlflow.start_run(nested=True):
     mlflow.log_artifact(report_path)
 
 print("🎉 Training selesai tanpa error!")
+print("==============================================")
