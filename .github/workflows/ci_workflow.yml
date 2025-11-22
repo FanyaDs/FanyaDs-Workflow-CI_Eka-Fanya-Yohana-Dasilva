@@ -43,10 +43,11 @@ jobs:
           echo "🔧 Tracking URI: $MLFLOW_TRACKING_URI"
           echo "📁 Isi direktori saat ini:"
           ls -R
-          echo "▶️ Menjalankan modelling.py ..."
-          python modelling.py || { echo "❌ Training gagal, cek log di atas."; exit 1; }
+          echo "▶️ Menjalankan MLflow Project ..."
+          mlflow run . --env-manager=local || { echo "❌ Training gagal, cek log di atas."; exit 1; }
           echo "✅ Training selesai. Cek apakah mlruns terbentuk..."
           ls -R mlruns || echo "⚠️ Folder mlruns belum ada!"
+
 
       # === [6] Cek isi folder MLProject (debug tambahan) ===
       - name: Cek isi folder MLProject
