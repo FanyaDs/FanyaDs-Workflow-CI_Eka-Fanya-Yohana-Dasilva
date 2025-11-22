@@ -46,7 +46,8 @@ try:
 except Exception as e:
     print(f"❌ Gagal memuat dataset: {e}")
     print("⚠️ [DEBUG] Program tidak dihentikan agar log tetap muncul.")
-    df = pd.DataFrame({"clean_text": ["fallback"], "label": [0]})  # dummy data agar tidak error lanjut
+    # dummy data supaya kode lanjut dan log tetap ke-MLflow
+    df = pd.DataFrame({"clean_text": ["fallback"], "label": [0]})
 
 # ===============================================================
 # [2] SPLIT DATA
@@ -54,7 +55,9 @@ except Exception as e:
 try:
     X = df["clean_text"]
     y = df["label"]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
     print("✅ Dataset berhasil dibagi menjadi train/test.")
     print(f"📈 Data Train: {len(X_train)}, Data Test: {len(X_test)}")
 except Exception as e:
@@ -78,6 +81,8 @@ except Exception as e:
 # [4] SETUP MLFLOW EXPERIMENT
 # ===============================================================
 try:
+    # Di workflow CI, MLFLOW_TRACKING_URI sudah di-set via environment,
+    # tapi di sini kita tetap siapkan mlruns lokal (aman, tidak konflik).
     mlruns_path = os.path.join(base_path, "mlruns")
     os.makedirs(mlruns_path, exist_ok=True)
 
@@ -89,62 +94,70 @@ except Exception as e:
     sys.exit(1)
 
 # ===============================================================
-# [5] TRAINING DAN LOGGING MODEL
+# [5] TRAINING DAN LOGGING MODEL (TANPA start_run MANUAL)
 # ===============================================================
 try:
     print("🧭 Membuat run baru MLflow (mode CI)...")
-    with mlflow.start_run(run_name="CI_Run_Fanya") as run:
-        print(f"🚀 Training RandomForest dimulai... Run ID: {run.info.run_id}")
+    # ❗ PENTING:
+    # Saat dijalankan lewat `mlflow run .`, MLflow Project SUDAH membuat run.
+    # Jadi kita TIDAK BOLEH pakai `with mlflow.start_run()` lagi di sini,
+    # supaya tidak terjadi konflik run ID.
+    print("🚀 Training RandomForest dimulai...")
 
-        clf = RandomForestClassifier(n_estimators=100, random_state=42)
-        clf.fit(X_train_vec, y_train)
-        y_pred = clf.predict(X_test_vec)
+    # === TRAIN MODEL ===
+    clf = RandomForestClassifier(n_estimators=100, random_state=42)
+    clf.fit(X_train_vec, y_train)
+    y_pred = clf.predict(X_test_vec)
 
-        # === METRICS ===
-        acc = accuracy_score(y_test, y_pred)
-        prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
-        rec = recall_score(y_test, y_pred, average="weighted", zero_division=0)
-        f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+    # === METRICS ===
+    acc = accuracy_score(y_test, y_pred)
+    prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+    rec = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+    f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
 
-        print("==============================================")
-        print(f"🔢 Accuracy : {acc:.4f}")
-        print(f"🎯 Precision: {prec:.4f}")
-        print(f"📈 Recall   : {rec:.4f}")
-        print(f"🏆 F1-score : {f1:.4f}")
-        print("==============================================")
+    print("==============================================")
+    print(f"🔢 Accuracy : {acc:.4f}")
+    print(f"🎯 Precision: {prec:.4f}")
+    print(f"📈 Recall   : {rec:.4f}")
+    print(f"🏆 F1-score : {f1:.4f}")
+    print("==============================================")
 
-        # === LOG KE MLFLOW ===
-        mlflow.log_metric("accuracy", acc)
-        mlflow.log_metric("precision", prec)
-        mlflow.log_metric("recall", rec)
-        mlflow.log_metric("f1_score", f1)
+    # === LOG KE MLFLOW (MANUAL LOGGING, SESUAI KRITERIA 2 SKILLED/ADVANCED) ===
+    mlflow.log_metric("accuracy", acc)
+    mlflow.log_metric("precision", prec)
+    mlflow.log_metric("recall", rec)
+    mlflow.log_metric("f1_score", f1)
 
-        mlflow.log_param("n_estimators", 100)
-        mlflow.log_param("random_state", 42)
-        mlflow.log_param("vectorizer", "CountVectorizer")
+    mlflow.log_param("n_estimators", 100)
+    mlflow.log_param("random_state", 42)
+    mlflow.log_param("vectorizer", "CountVectorizer")
 
-        # === SIMPAN MODEL ===
-        mlflow.sklearn.log_model(clf, artifact_path="model")
+    # === SIMPAN MODEL KE ARTIFACTS MLFLOW ===
+    mlflow.sklearn.log_model(clf, artifact_path="model")
 
-        # === LOG ARTEFAK TAMBAHAN ===
-        artifacts_dir = os.path.join(base_path, "artifacts")
-        os.makedirs(artifacts_dir, exist_ok=True)
+    # === LOG ARTEFAK TAMBAHAN (VECTORIZE & REPORT) ===
+    artifacts_dir = os.path.join(base_path, "artifacts")
+    os.makedirs(artifacts_dir, exist_ok=True)
 
-        vectorizer_path = os.path.join(artifacts_dir, "vectorizer.pkl")
-        joblib.dump(vectorizer, vectorizer_path)
-        mlflow.log_artifact(vectorizer_path)
+    # Simpan dan log vectorizer
+    vectorizer_path = os.path.join(artifacts_dir, "vectorizer.pkl")
+    joblib.dump(vectorizer, vectorizer_path)
+    mlflow.log_artifact(vectorizer_path)
 
-        report_path = os.path.join(artifacts_dir, "metrics_report.txt")
-        with open(report_path, "w") as f:
-            f.write("=== MODEL METRICS REPORT ===\n")
-            f.write(f"Accuracy  : {acc:.4f}\n")
-            f.write(f"Precision : {prec:.4f}\n")
-            f.write(f"Recall    : {rec:.4f}\n")
-            f.write(f"F1-score  : {f1:.4f}\n\n")
-            f.write(classification_report(y_test, y_pred))
-        mlflow.log_artifact(report_path)
+    # Simpan dan log metrics report
+    report_path = os.path.join(artifacts_dir, "metrics_report.txt")
+    with open(report_path, "w") as f:
+        f.write("=== MODEL METRICS REPORT ===\n")
+        f.write(f"Accuracy  : {acc:.4f}\n")
+        f.write(f"Precision : {prec:.4f}\n")
+        f.write(f"Recall    : {rec:.4f}\n")
+        f.write(f"F1-score  : {f1:.4f}\n\n")
+        f.write(classification_report(y_test, y_pred))
 
-        print(f"✅ Model dan metrik berhasil dilog di Run ID: {run.info.run_id}")
+    mlflow.log_artifact(report_path)
+
+    print("✅ Model dan metrik berhasil dilog ke MLflow.")
+
 except Exception as e:
     print(f"❌ Terjadi error saat training/logging: {e}")
     sys.exit(1)
